@@ -15,6 +15,14 @@ export const CityPerformanceChart: React.FC<CityPerformanceChartProps> = ({
   const [sortBy, setSortBy] = useState<'gmv' | 'orders' | 'impressions' | 'zeroSales'>('gmv');
   const [viewCount, setViewCount] = useState<number>(10);
 
+  if (citySummaries.length === 0) {
+    return (
+      <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 text-center text-slate-400 text-xs">
+        No city data available for the current selection.
+      </div>
+    );
+  }
+
   const sortedCities = [...citySummaries].sort((a, b) => {
     if (sortBy === 'gmv') return b.totalGmv - a.totalGmv;
     if (sortBy === 'orders') return b.totalOrders - a.totalOrders;
@@ -102,8 +110,8 @@ export const CityPerformanceChart: React.FC<CityPerformanceChartProps> = ({
         {displayedCities.map((city, idx) => {
           const gmvPercent = (city.totalGmv / maxGmv) * 100;
           const impPercent = (city.totalImpressions / maxImpressions) * 100;
-          const isBangalore = city.city.toLowerCase() === 'bangalore';
-          const isHighZeroSales = city.zeroSalesCount > 15;
+          const isTopMarket = idx === 0;
+          const isHighZeroSales = city.zeroSalesCount > 5;
 
           return (
             <div
@@ -119,9 +127,9 @@ export const CityPerformanceChart: React.FC<CityPerformanceChartProps> = ({
                   <span className="font-bold text-slate-900 dark:text-white capitalize text-sm">
                     {city.city}
                   </span>
-                  {isBangalore && (
+                  {isTopMarket && (
                     <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-bold">
-                      Primary Powerhouse
+                      Top Market
                     </span>
                   )}
                   {isHighZeroSales && (

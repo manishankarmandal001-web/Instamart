@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx';
 import { SalesRecord } from '../data/initialData';
 import { formatCurrency, formatNumber, formatDateWithDay } from '../utils/formatters';
 import { generatePdfReport, PdfReportOptions } from '../utils/pdfGenerator';
+import { parseExcelOrCsvFile, ParseResult } from '../utils/excelParser';
 import { DailySummary, CitySummary, BrandSummary } from '../types';
 import { useAuth } from '../firebase/AuthContext';
 import { addCustomRecord } from '../firebase/firestoreService';
@@ -22,6 +23,9 @@ import {
   Sparkles,
   Search,
   Filter,
+  Check,
+  Loader2,
+  Layers,
 } from 'lucide-react';
 
 interface ExcelUploadTabProps {
@@ -30,6 +34,8 @@ interface ExcelUploadTabProps {
   citySummaries: CitySummary[];
   brandSummaries: BrandSummary[];
   onLoadUploadedRecords: (records: SalesRecord[], mode: 'replace' | 'merge') => void;
+  onNavigateToOverview?: () => void;
+  onNavigateToAds?: () => void;
 }
 
 export const ExcelUploadTab: React.FC<ExcelUploadTabProps> = ({
@@ -38,6 +44,8 @@ export const ExcelUploadTab: React.FC<ExcelUploadTabProps> = ({
   citySummaries,
   brandSummaries,
   onLoadUploadedRecords,
+  onNavigateToOverview,
+  onNavigateToAds,
 }) => {
   const { user } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -46,6 +54,8 @@ export const ExcelUploadTab: React.FC<ExcelUploadTabProps> = ({
   const [dragActive, setDragActive] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
   const [uploadedRecords, setUploadedRecords] = useState<SalesRecord[]>([]);
+  const [parseResult, setParseResult] = useState<ParseResult | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
   const [isSyncingFirebase, setIsSyncingFirebase] = useState(false);
@@ -64,100 +74,29 @@ export const ExcelUploadTab: React.FC<ExcelUploadTabProps> = ({
   const [previewPage, setPreviewPage] = useState(1);
   const pageSize = 8;
 
-  // Flexible column resolver helper
-  const findValue = (row: any, candidates: string[]): any => {
-    for (const key of Object.keys(row)) {
-      const normalizedKey = key.trim().toLowerCase().replace(/[\s_-]+/g, '');
-      for (const cand of candidates) {
-        if (normalizedKey === cand.toLowerCase().replace(/[\s_-]+/g, '')) {
-          return row[key];
-        }
-      }
-    }
-    return undefined;
-  };
-
-  const handleFileUpload = (file: File) => {
+  const handleFileUpload = async (file: File) => {
     setUploadError(null);
     setUploadSuccess(null);
     setFileName(file.name);
+    setIsProcessing(true);
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const data = e.target?.result;
-        const workbook = XLSX.read(data, { type: 'binary' });
-        const firstSheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[firstSheetName];
-        const jsonRows: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+    try {
+      const result = await parseExcelOrCsvFile(file);
+      setUploadedRecords(result.records);
+      setParseResult(result);
 
-        if (!jsonRows || jsonRows.length === 0) {
-          setUploadError('The uploaded file is empty or has no recognizable data rows.');
-          return;
-        }
+      // Auto-load directly into the application state so it immediately works!
+      onLoadUploadedRecords(result.records, 'replace');
 
-        const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-        const parsedRecords: SalesRecord[] = [];
-
-        jsonRows.forEach((row, idx) => {
-          // Resolve fields flexibly
-          const rawBrand = findValue(row, ['brand_name', 'brand', 'brandname']) || 'nafa';
-          let rawDate = findValue(row, ['date', 'day', 'order_date']) || '2026-09-01';
-          const rawCity = findValue(row, ['city', 'location', 'territory', 'place']) || 'general';
-          const rawNtb = Number(findValue(row, ['ntb_buyers', 'ntb', 'new_buyers', 'newbuyers'])) || 0;
-          const rawImpressions = Number(findValue(row, ['brand_impressions', 'impressions', 'ad_impressions', 'views'])) || 0;
-          const rawGmv = Number(findValue(row, ['brand_gmv', 'gmv', 'sales', 'revenue', 'amount'])) || 0;
-          const rawOrders = Number(findValue(row, ['brand_orders', 'orders', 'units', 'total_orders'])) || 0;
-
-          // Normalize Date if it is Excel serial date number
-          if (typeof rawDate === 'number') {
-            const excelDate = new Date(Math.round((rawDate - 25569) * 86400 * 1000));
-            rawDate = excelDate.toISOString().slice(0, 10);
-          } else {
-            rawDate = String(rawDate).trim().slice(0, 10);
-          }
-
-          const dt = new Date(rawDate + 'T00:00:00Z');
-          const dayOfWeek = isNaN(dt.getTime()) ? 'Monday' : dayNames[dt.getUTCDay()];
-
-          let salesTier: 'zero' | 'low' | 'medium' | 'high' = 'zero';
-          if (rawGmv >= 10000) salesTier = 'high';
-          else if (rawGmv >= 1000) salesTier = 'medium';
-          else if (rawGmv > 0) salesTier = 'low';
-
-          parsedRecords.push({
-            id: `upload_${Date.now()}_${idx}`,
-            brand: String(rawBrand).trim().toLowerCase(),
-            date: rawDate,
-            city: String(rawCity).trim().toLowerCase(),
-            ntbBuyers: rawNtb,
-            impressions: rawImpressions,
-            gmv: rawGmv,
-            orders: rawOrders,
-            aov: rawOrders > 0 ? Math.round(rawGmv / rawOrders) : 0,
-            conversionRate: rawImpressions > 0 ? Number(((rawOrders / rawImpressions) * 100).toFixed(2)) : 0,
-            rpm: rawImpressions > 0 ? Number(((rawGmv / rawImpressions) * 1000).toFixed(1)) : 0,
-            salesTier,
-            dayOfWeek,
-            isTrafficLeak: rawImpressions >= 150 && rawGmv === 0,
-            isSpike: rawGmv >= 15000,
-          });
-        });
-
-        if (parsedRecords.length === 0) {
-          setUploadError('Could not parse any valid sales rows from this file.');
-          return;
-        }
-
-        setUploadedRecords(parsedRecords);
-        setUploadSuccess(`Successfully parsed ${parsedRecords.length} records from "${file.name}"!`);
-      } catch (err: any) {
-        console.error('Excel parse error:', err);
-        setUploadError(`Failed to parse file: ${err.message || 'Invalid Excel format'}`);
-      }
-    };
-
-    reader.readAsBinaryString(file);
+      setUploadSuccess(
+        `Loaded ${result.records.length} records from "${file.name}" (Sheet: ${result.sheetName}, Dates: ${result.minDate} to ${result.maxDate}). Dashboard is now live!`
+      );
+    } catch (err: any) {
+      console.error('Excel parse error:', err);
+      setUploadError(err.message || 'Failed to read data rows from this spreadsheet. Please ensure it contains data.');
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const handleDrag = (e: React.DragEvent) => {
@@ -372,14 +311,23 @@ export const ExcelUploadTab: React.FC<ExcelUploadTabProps> = ({
             />
 
             <div className="w-12 h-12 rounded-2xl bg-emerald-100 dark:bg-emerald-950/70 text-emerald-600 dark:text-emerald-400 mx-auto flex items-center justify-center mb-3">
-              <Upload className="w-6 h-6" />
+              {isProcessing ? (
+                <Loader2 className="w-6 h-6 animate-spin text-emerald-600" />
+              ) : (
+                <Upload className="w-6 h-6" />
+              )}
             </div>
 
             <p className="text-sm font-bold text-slate-800 dark:text-slate-200">
-              Drag & Drop your Excel file here, or <span className="text-emerald-600 dark:text-emerald-400 underline">Browse</span>
+              {isProcessing
+                ? 'Processing spreadsheet...'
+                : 'Drag & Drop your Excel file here, or '}
+              {!isProcessing && (
+                <span className="text-emerald-600 dark:text-emerald-400 underline">Browse</span>
+              )}
             </p>
             <p className="text-xs text-slate-400 mt-1">
-              Supports .xlsx, .xls, and .csv files up to 20MB
+              Supports .xlsx, .xls, and .csv files with any column headers and date formats
             </p>
 
             {fileName && (
@@ -399,11 +347,95 @@ export const ExcelUploadTab: React.FC<ExcelUploadTabProps> = ({
           )}
 
           {uploadSuccess && (
-            <div className="mt-4 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-800 dark:text-emerald-300 flex items-center justify-between">
-              <div className="flex items-center gap-2">
+            <div className="mt-4 p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-800 dark:text-emerald-300 space-y-2">
+              <div className="flex items-center gap-2 font-medium">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
                 <span>{uploadSuccess}</span>
               </div>
+
+              {parseResult && (
+                <div className="space-y-3 pt-2 border-t border-emerald-200 dark:border-emerald-800/60 text-[11px]">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <div className="p-1.5 rounded-lg bg-emerald-100/60 dark:bg-emerald-900/40">
+                      <span className="text-emerald-700 dark:text-emerald-400 font-semibold block">Active Sheet</span>
+                      <span className="text-slate-700 dark:text-slate-300 truncate block font-bold">{parseResult.sheetName}</span>
+                    </div>
+                    <div className="p-1.5 rounded-lg bg-emerald-100/60 dark:bg-emerald-900/40">
+                      <span className="text-emerald-700 dark:text-emerald-400 font-semibold block">Total Rows</span>
+                      <span className="text-slate-700 dark:text-slate-300 font-bold">{parseResult.totalRows}</span>
+                    </div>
+                    <div className="p-1.5 rounded-lg bg-emerald-100/60 dark:bg-emerald-900/40 col-span-2">
+                      <span className="text-emerald-700 dark:text-emerald-400 font-semibold block">Date Span</span>
+                      <span className="text-slate-700 dark:text-slate-300 font-mono">{parseResult.minDate} → {parseResult.maxDate}</span>
+                    </div>
+                  </div>
+
+                  {/* Detected Columns Pills */}
+                  {parseResult.detectedColumns && Object.keys(parseResult.detectedColumns).length > 0 && (
+                    <div className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80">
+                      <span className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                        Detected Column Mappings:
+                      </span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {Object.entries(parseResult.detectedColumns).map(([field, rawH]) => (
+                          <span
+                            key={field}
+                            className={`px-2 py-0.5 rounded-md text-[10px] font-semibold border ${
+                              field.includes('Impressions')
+                                ? 'bg-sky-100 dark:bg-sky-950 text-sky-800 dark:text-sky-300 border-sky-300 dark:border-sky-800'
+                                : 'bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-600'
+                            }`}
+                          >
+                            {field}: <strong>&quot;{rawH}&quot;</strong>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Multi-Sheet Selector if workbook has more than 1 sheet */}
+                  {parseResult.sheets && parseResult.sheets.length > 1 && (
+                    <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                          <Layers className="w-3.5 h-3.5 text-indigo-500" />
+                          <span>Workbook Sheets ({parseResult.sheets.length}): Switch or Combine</span>
+                        </span>
+                        <span className="text-[10px] text-slate-500">Select which page to analyze</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        <button
+                          onClick={() => {
+                            onLoadUploadedRecords(parseResult.records, 'replace');
+                            setUploadedRecords(parseResult.records);
+                          }}
+                          className="px-2.5 py-1 rounded-lg text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs transition"
+                        >
+                          All Sheets Combined ({parseResult.totalRows} rows)
+                        </button>
+                        {parseResult.sheets.map((sh) => (
+                          <button
+                            key={sh.sheetName}
+                            onClick={() => {
+                              onLoadUploadedRecords(sh.records, 'replace');
+                              setUploadedRecords(sh.records);
+                            }}
+                            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border transition ${
+                              sh.isAdsSheet
+                                ? 'bg-sky-100 hover:bg-sky-200 dark:bg-sky-950/80 dark:hover:bg-sky-900 text-sky-800 dark:text-sky-200 border-sky-300 dark:border-sky-700 font-bold'
+                                : 'bg-white hover:bg-slate-50 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 border-slate-200 dark:border-slate-600'
+                            }`}
+                          >
+                            {sh.isAdsSheet && <Sparkles className="w-3 h-3 text-sky-500" />}
+                            <span>{sh.sheetName}</span>
+                            <span className="text-[10px] opacity-75">({sh.totalRows} rows)</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -417,18 +449,36 @@ export const ExcelUploadTab: React.FC<ExcelUploadTabProps> = ({
           {/* Action buttons after file is parsed */}
           {uploadedRecords.length > 0 && (
             <div className="mt-5 pt-4 border-t border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {onNavigateToOverview && (
+                  <button
+                    onClick={onNavigateToOverview}
+                    className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm shadow-indigo-600/20 transition-all"
+                  >
+                    <span>View Overview</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                {onNavigateToAds && (
+                  <button
+                    onClick={onNavigateToAds}
+                    className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl bg-sky-600 hover:bg-sky-700 text-white shadow-sm shadow-sky-600/20 transition-all"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    <span>View Ads Analysis</span>
+                  </button>
+                )}
                 <button
                   onClick={() => onLoadUploadedRecords(uploadedRecords, 'replace')}
-                  className="px-4 py-2 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all"
+                  className="px-3 py-2 text-xs font-semibold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all"
                 >
-                  Analyze in Trrop (Replace)
+                  Re-apply (Replace)
                 </button>
                 <button
                   onClick={() => onLoadUploadedRecords(uploadedRecords, 'merge')}
-                  className="px-4 py-2 text-xs font-semibold rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 transition-all"
+                  className="px-3 py-2 text-xs font-semibold rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 transition-all"
                 >
-                  Merge with Current Data
+                  Merge with Current
                 </button>
               </div>
 

@@ -26,6 +26,8 @@ interface FilterBarProps {
   savedFilters: SavedFilter[];
   totalFilteredCount: number;
   totalRawCount: number;
+  defaultStartDate?: string;
+  defaultEndDate?: string;
 }
 
 export const FilterBar: React.FC<FilterBarProps> = ({
@@ -36,6 +38,8 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   savedFilters,
   totalFilteredCount,
   totalRawCount,
+  defaultStartDate = '',
+  defaultEndDate = '',
 }) => {
   const { user } = useAuth();
   const [cityDropdownOpen, setCityDropdownOpen] = useState(false);
@@ -51,13 +55,6 @@ export const FilterBar: React.FC<FilterBarProps> = ({
     { id: 'medium', label: 'Medium Sales', countDesc: '₹1k - ₹10k', color: 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300' },
     { id: 'high', label: 'High Sales Spikes', countDesc: 'GMV ≥ ₹10k', color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300' },
     { id: 'traffic_leak', label: 'Traffic Leaks', countDesc: '≥150 Imp. & 0 Sales', color: 'bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300' },
-  ];
-
-  const datePresets = [
-    { label: 'All Dates (Sept 1-29)', start: '2026-09-01', end: '2026-09-29' },
-    { label: 'First Half (Sept 1-15)', start: '2026-09-01', end: '2026-09-15' },
-    { label: 'Second Half (Sept 16-29)', start: '2026-09-16', end: '2026-09-29' },
-    { label: 'Last 7 Days (Sept 23-29)', start: '2026-09-23', end: '2026-09-29' },
   ];
 
   const daysOfWeek = ['All', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -79,8 +76,8 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   const handleReset = () => {
     setFilter({
       brand: 'all',
-      startDate: '2026-09-01',
-      endDate: '2026-09-29',
+      startDate: defaultStartDate,
+      endDate: defaultEndDate,
       selectedCities: [],
       performance: 'all',
       dayOfWeek: 'All',
@@ -90,8 +87,8 @@ export const FilterBar: React.FC<FilterBarProps> = ({
 
   const isFiltered =
     filter.brand !== 'all' ||
-    filter.startDate !== '2026-09-01' ||
-    filter.endDate !== '2026-09-29' ||
+    (defaultStartDate && filter.startDate !== defaultStartDate) ||
+    (defaultEndDate && filter.endDate !== defaultEndDate) ||
     filter.selectedCities.length > 0 ||
     filter.performance !== 'all' ||
     filter.dayOfWeek !== 'All' ||
@@ -271,13 +268,11 @@ export const FilterBar: React.FC<FilterBarProps> = ({
         {/* Date Presets & Custom Picker */}
         <div>
           <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">
-            Date Range ({filter.startDate.slice(5)} to {filter.endDate.slice(5)})
+            Date Range {filter.startDate && filter.endDate ? `(${filter.startDate} to ${filter.endDate})` : ''}
           </label>
           <div className="flex items-center gap-1.5">
             <input
               type="date"
-              min="2026-09-01"
-              max="2026-09-29"
               value={filter.startDate}
               onChange={(e) => setFilter((prev) => ({ ...prev, startDate: e.target.value }))}
               className="w-1/2 px-2 py-1.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
@@ -285,8 +280,6 @@ export const FilterBar: React.FC<FilterBarProps> = ({
             <span className="text-slate-400 text-xs">to</span>
             <input
               type="date"
-              min="2026-09-01"
-              max="2026-09-29"
               value={filter.endDate}
               onChange={(e) => setFilter((prev) => ({ ...prev, endDate: e.target.value }))}
               className="w-1/2 px-2 py-1.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
@@ -297,7 +290,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
         {/* City Filter Dropdown */}
         <div className="relative">
           <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">
-            City Filter ({filter.selectedCities.length === 0 ? 'All 24 Cities' : `${filter.selectedCities.length} Selected`})
+            City Filter ({filter.selectedCities.length === 0 ? `All ${availableCities.length} Cities` : `${filter.selectedCities.length} Selected`})
           </label>
           <button
             onClick={() => setCityDropdownOpen(!cityDropdownOpen)}

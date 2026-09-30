@@ -216,7 +216,14 @@ export const DateWiseTable: React.FC<DateWiseTableProps> = ({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-            {filteredSummaries.map((day) => {
+            {filteredSummaries.length === 0 ? (
+              <tr>
+                <td colSpan={8} className="py-8 text-center text-slate-400 text-xs">
+                  No date-wise records found for the selected filter or no data loaded.
+                </td>
+              </tr>
+            ) : (
+              filteredSummaries.map((day) => {
               const isExpanded = !!expandedDates[day.date];
               const isPeakDay = day.totalGmv >= 35000;
               const hasZeroSales = day.zeroSalesCount > 0;
@@ -378,7 +385,7 @@ export const DateWiseTable: React.FC<DateWiseTableProps> = ({
                   )}
                 </React.Fragment>
               );
-            })}
+            }))}
           </tbody>
         </table>
       </div>

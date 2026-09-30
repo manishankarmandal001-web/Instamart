@@ -8,6 +8,14 @@ interface DayOfWeekChartProps {
 }
 
 export const DayOfWeekChart: React.FC<DayOfWeekChartProps> = ({ records }) => {
+  if (records.length === 0) {
+    return (
+      <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 text-center text-slate-400 text-xs">
+        No sales data available for day-of-week pattern analysis.
+      </div>
+    );
+  }
+
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
   const stats = days.map((day) => {

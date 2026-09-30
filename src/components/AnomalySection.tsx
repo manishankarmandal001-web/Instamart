@@ -27,6 +27,14 @@ export const AnomalySection: React.FC<AnomalySectionProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'zero' | 'low' | 'high' | 'leaks'>('zero');
 
+  if (records.length === 0) {
+    return (
+      <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 text-center text-slate-400 text-xs">
+        No sales data available to analyze for anomalies.
+      </div>
+    );
+  }
+
   const zeroRecords = records.filter((r) => r.salesTier === 'zero');
   const lowRecords = records.filter((r) => r.salesTier === 'low');
   const highRecords = records.filter((r) => r.salesTier === 'high');
@@ -163,7 +171,7 @@ export const AnomalySection: React.FC<AnomalySectionProps> = ({
                 </div>
                 {onOpenNotesWithTarget && (
                   <button
-                    onClick={() => onOpenNotesWithTarget('2026-09-15', item.city)}
+                    onClick={() => onOpenNotesWithTarget('', item.city)}
                     className="text-[10px] text-indigo-600 dark:text-indigo-400 hover:underline mt-1 block"
                   >
                     + Add Analysis Note

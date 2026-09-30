@@ -12,6 +12,14 @@ export const BrandComparison: React.FC<BrandComparisonProps> = ({
   brandSummaries,
   onSelectBrand,
 }) => {
+  if (brandSummaries.length === 0) {
+    return (
+      <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 text-center text-slate-400 text-xs">
+        No brand metrics available for the current selection.
+      </div>
+    );
+  }
+
   const totalAllGmv = brandSummaries.reduce((s, b) => s + b.totalGmv, 0);
 
   return (
@@ -23,7 +31,7 @@ export const BrandComparison: React.FC<BrandComparisonProps> = ({
             <span>Brand Metrics & Portfolio Comparison</span>
           </h3>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Performance comparison between brands in portfolio (nafa vs averx)
+            Performance comparison across all brands in your dataset
           </p>
         </div>
       </div>
@@ -55,7 +63,7 @@ export const BrandComparison: React.FC<BrandComparisonProps> = ({
                       Brand: {brand.brand}
                     </h4>
                     <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                      {isNafa ? 'Pan-India footprint (24 cities)' : 'Bangalore focus (High yield)'}
+                      {brand.recordsCount} sales & ad data entries
                     </span>
                   </div>
                 </div>

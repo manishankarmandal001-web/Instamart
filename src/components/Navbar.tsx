@@ -19,6 +19,7 @@ import {
   FileSpreadsheet,
 } from 'lucide-react';
 import { useAuth } from '../firebase/AuthContext';
+import { PWAInstallButton } from './PWAInstallButton';
 
 interface NavbarProps {
   activeTab: 'overview' | 'sales' | 'ads' | 'anomalies' | 'datewise' | 'upload' | 'notes';
@@ -116,6 +117,9 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Actions & User State */}
           <div className="flex items-center gap-2">
+            {/* PWA Install Button for PC & Mobile */}
+            <PWAInstallButton variant="navbar" />
+
             {/* Add Record Button */}
             <button
               onClick={onOpenAddModal}
@@ -226,7 +230,8 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
             );
           })}
-          <div className="pt-2">
+          <div className="pt-2 space-y-2">
+            <PWAInstallButton variant="banner" />
             <button
               onClick={() => {
                 onOpenAddModal();

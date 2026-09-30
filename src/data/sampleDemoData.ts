@@ -17,11 +17,7 @@ export interface SalesRecord {
   isSpike: boolean;
 }
 
-// Initial sales data is empty as requested by user (demo data removed)
-export const INITIAL_SALES_DATA: SalesRecord[] = [];
-
-// Optional sample data available if user wants to test the dashboard
-export const SAMPLE_SALES_DATA: SalesRecord[] = [
+export const SAMPLE_DEMO_DATA: SalesRecord[] = [
   {
     "id": "rec_1",
     "brand": "nafa",

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { AuthProvider, useAuth } from './firebase/AuthContext';
-import { INITIAL_SALES_DATA, SalesRecord } from './data/initialData';
+import { INITIAL_SALES_DATA, SAMPLE_SALES_DATA, SalesRecord } from './data/initialData';
 import { FilterState, PerformanceFilter, DailySummary, CitySummary, BrandSummary } from './types';
 import { Navbar } from './components/Navbar';
 import { FilterBar } from './components/FilterBar';
@@ -14,6 +14,9 @@ import { AdsAnalyticsTab } from './components/AdsAnalyticsTab';
 import { DayOfWeekChart } from './components/DayOfWeekChart';
 import { NotesAndSyncModal } from './components/NotesAndSyncModal';
 import { ExcelUploadTab } from './components/ExcelUploadTab';
+import { EmptyState } from './components/EmptyState';
+import { OfflineIndicator } from './components/OfflineIndicator';
+import { PWAInstallButton } from './components/PWAInstallButton';
 import {
   SavedFilter,
   DataNote,
@@ -113,6 +116,37 @@ function TrropDashboard() {
 
   const handleLoadUploadedRecords = (records: SalesRecord[], mode: 'replace' | 'merge') => {
     setUploadedDataset({ records, mode });
+    if (records.length > 0) {
+      const dates = records.map((r) => r.date).filter(Boolean).sort();
+      const minDate = dates[0] || '';
+      const maxDate = dates[dates.length - 1] || '';
+      setFilter((prev) => ({
+        ...prev,
+        brand: 'all',
+        startDate: minDate,
+        endDate: maxDate,
+        selectedCities: [],
+        performance: 'all',
+        dayOfWeek: 'All',
+        searchTerm: '',
+      }));
+    }
+  };
+
+  const handleLoadSampleData = () => {
+    setUploadedDataset({ records: SAMPLE_SALES_DATA, mode: 'replace' });
+    const dates = SAMPLE_SALES_DATA.map((r) => r.date).filter(Boolean).sort();
+    const minDate = dates[0] || '2026-09-08';
+    const maxDate = dates[dates.length - 1] || '2026-09-29';
+    setFilter({
+      brand: 'all',
+      startDate: minDate,
+      endDate: maxDate,
+      selectedCities: [],
+      performance: 'all',
+      dayOfWeek: 'All',
+      searchTerm: '',
+    });
     setActiveTab('overview');
   };
 
@@ -129,11 +163,29 @@ function TrropDashboard() {
     return Array.from(set).sort();
   }, [allRecords]);
 
+  const datasetMinDate = useMemo(() => {
+    if (allRecords.length === 0) return '';
+    let min = allRecords[0].date;
+    for (const r of allRecords) {
+      if (r.date && r.date < min) min = r.date;
+    }
+    return min;
+  }, [allRecords]);
+
+  const datasetMaxDate = useMemo(() => {
+    if (allRecords.length === 0) return '';
+    let max = allRecords[0].date;
+    for (const r of allRecords) {
+      if (r.date && r.date > max) max = r.date;
+    }
+    return max;
+  }, [allRecords]);
+
   // Filter state
   const [filter, setFilter] = useState<FilterState>({
     brand: 'all',
-    startDate: '2026-09-01',
-    endDate: '2026-09-29',
+    startDate: '',
+    endDate: '',
     selectedCities: [],
     performance: 'all',
     dayOfWeek: 'All',
@@ -148,7 +200,10 @@ function TrropDashboard() {
         return false;
       }
       // Date range filter
-      if (rec.date < filter.startDate || rec.date > filter.endDate) {
+      if (filter.startDate && rec.date < filter.startDate) {
+        return false;
+      }
+      if (filter.endDate && rec.date > filter.endDate) {
         return false;
       }
       // City filter
@@ -348,6 +403,7 @@ function TrropDashboard() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
+            <PWAInstallButton variant="banner" />
             <button
               onClick={() => setActiveTab('upload')}
               className="flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white shadow-md shadow-emerald-500/20 transition-all"
@@ -395,132 +451,179 @@ function TrropDashboard() {
           savedFilters={savedFilters}
           totalFilteredCount={filteredRecords.length}
           totalRawCount={allRecords.length}
+          defaultStartDate={datasetMinDate}
+          defaultEndDate={datasetMaxDate}
         />
 
         {/* Tab 1: Overview */}
         {activeTab === 'overview' && (
-          <div className="space-y-6">
-            <KpiCards
-              totalGmv={totalGmv}
-              totalOrders={totalOrders}
-              totalImpressions={totalImpressions}
-              totalNtb={totalNtb}
-              zeroSalesCount={zeroSalesCount}
-              lowSalesCount={lowSalesCount}
-              highSalesCount={highSalesCount}
-              trafficLeakCount={trafficLeakCount}
-              wastedImpressions={wastedImpressions}
-              onFilterByTier={handleFilterByTier}
+          allRecords.length === 0 ? (
+            <EmptyState
+              onGoToUpload={() => setActiveTab('upload')}
+              onLoadSampleData={handleLoadSampleData}
+              onOpenAddModal={() => setIsAddModalOpen(true)}
+              onLoadedRecords={handleLoadUploadedRecords}
             />
+          ) : (
+            <div className="space-y-6">
+              <KpiCards
+                totalGmv={totalGmv}
+                totalOrders={totalOrders}
+                totalImpressions={totalImpressions}
+                totalNtb={totalNtb}
+                zeroSalesCount={zeroSalesCount}
+                lowSalesCount={lowSalesCount}
+                highSalesCount={highSalesCount}
+                trafficLeakCount={trafficLeakCount}
+                wastedImpressions={wastedImpressions}
+                onFilterByTier={handleFilterByTier}
+              />
 
-            <DateTimelineChart
-              dailyData={dailySummaries}
-              onSelectDate={(date) => {
-                setFilter((p) => ({ ...p, startDate: date, endDate: date }));
-              }}
+              <DateTimelineChart
+                dailyData={dailySummaries}
+                onSelectDate={(date) => {
+                  setFilter((p) => ({ ...p, startDate: date, endDate: date }));
+                }}
+              />
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <CityPerformanceChart
+                  citySummaries={citySummaries}
+                  onSelectCity={(city) => {
+                    setFilter((p) => ({ ...p, selectedCities: [city] }));
+                  }}
+                />
+                <BrandComparison
+                  brandSummaries={brandSummaries}
+                  onSelectBrand={(brand) => {
+                    setFilter((p) => ({ ...p, brand }));
+                  }}
+                />
+              </div>
+
+              <AnomalySection
+                records={filteredRecords}
+                onApplyFilter={handleFilterByTier}
+                onOpenNotesWithTarget={handleOpenNotesWithTarget}
+              />
+            </div>
+          )
+        )}
+
+        {/* Tab 2: Sales Deep Dive */}
+        {activeTab === 'sales' && (
+          allRecords.length === 0 ? (
+            <EmptyState
+              onGoToUpload={() => setActiveTab('upload')}
+              onLoadSampleData={handleLoadSampleData}
+              onOpenAddModal={() => setIsAddModalOpen(true)}
+              onLoadedRecords={handleLoadUploadedRecords}
             />
+          ) : (
+            <div className="space-y-6">
+              <KpiCards
+                totalGmv={totalGmv}
+                totalOrders={totalOrders}
+                totalImpressions={totalImpressions}
+                totalNtb={totalNtb}
+                zeroSalesCount={zeroSalesCount}
+                lowSalesCount={lowSalesCount}
+                highSalesCount={highSalesCount}
+                trafficLeakCount={trafficLeakCount}
+                wastedImpressions={wastedImpressions}
+                onFilterByTier={handleFilterByTier}
+              />
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <DateTimelineChart
+                dailyData={dailySummaries}
+                onSelectDate={(date) => {
+                  setFilter((p) => ({ ...p, startDate: date, endDate: date }));
+                }}
+              />
+
+              <DayOfWeekChart records={filteredRecords} />
+
               <CityPerformanceChart
                 citySummaries={citySummaries}
                 onSelectCity={(city) => {
                   setFilter((p) => ({ ...p, selectedCities: [city] }));
                 }}
               />
-              <BrandComparison
-                brandSummaries={brandSummaries}
-                onSelectBrand={(brand) => {
-                  setFilter((p) => ({ ...p, brand }));
-                }}
-              />
             </div>
-
-            <AnomalySection
-              records={filteredRecords}
-              onApplyFilter={handleFilterByTier}
-              onOpenNotesWithTarget={handleOpenNotesWithTarget}
-            />
-          </div>
-        )}
-
-        {/* Tab 2: Sales Deep Dive */}
-        {activeTab === 'sales' && (
-          <div className="space-y-6">
-            <KpiCards
-              totalGmv={totalGmv}
-              totalOrders={totalOrders}
-              totalImpressions={totalImpressions}
-              totalNtb={totalNtb}
-              zeroSalesCount={zeroSalesCount}
-              lowSalesCount={lowSalesCount}
-              highSalesCount={highSalesCount}
-              trafficLeakCount={trafficLeakCount}
-              wastedImpressions={wastedImpressions}
-              onFilterByTier={handleFilterByTier}
-            />
-
-            <DateTimelineChart
-              dailyData={dailySummaries}
-              onSelectDate={(date) => {
-                setFilter((p) => ({ ...p, startDate: date, endDate: date }));
-              }}
-            />
-
-            <DayOfWeekChart records={filteredRecords} />
-
-            <CityPerformanceChart
-              citySummaries={citySummaries}
-              onSelectCity={(city) => {
-                setFilter((p) => ({ ...p, selectedCities: [city] }));
-              }}
-            />
-          </div>
+          )
         )}
 
         {/* Tab 3: Ads & Impressions Analysis */}
         {activeTab === 'ads' && (
-          <div className="space-y-6">
-            <AdsAnalyticsTab records={filteredRecords} />
-            <DateTimelineChart
-              dailyData={dailySummaries}
-              onSelectDate={(date) => {
-                setFilter((p) => ({ ...p, startDate: date, endDate: date }));
-              }}
+          allRecords.length === 0 ? (
+            <EmptyState
+              onGoToUpload={() => setActiveTab('upload')}
+              onLoadSampleData={handleLoadSampleData}
+              onOpenAddModal={() => setIsAddModalOpen(true)}
+              onLoadedRecords={handleLoadUploadedRecords}
             />
-          </div>
+          ) : (
+            <div className="space-y-6">
+              <AdsAnalyticsTab records={filteredRecords} />
+              <DateTimelineChart
+                dailyData={dailySummaries}
+                onSelectDate={(date) => {
+                  setFilter((p) => ({ ...p, startDate: date, endDate: date }));
+                }}
+              />
+            </div>
+          )
         )}
 
         {/* Tab 4: Anomaly & Zero/Low Sales Filtering */}
         {activeTab === 'anomalies' && (
-          <div className="space-y-6">
-            <AnomalySection
-              records={filteredRecords}
-              onApplyFilter={handleFilterByTier}
-              onOpenNotesWithTarget={handleOpenNotesWithTarget}
+          allRecords.length === 0 ? (
+            <EmptyState
+              onGoToUpload={() => setActiveTab('upload')}
+              onLoadSampleData={handleLoadSampleData}
+              onOpenAddModal={() => setIsAddModalOpen(true)}
+              onLoadedRecords={handleLoadUploadedRecords}
             />
-            <DateWiseTable
-              dailySummaries={dailySummaries}
-              allFilteredRecords={filteredRecords}
-              onOpenNotesWithTarget={handleOpenNotesWithTarget}
-            />
-          </div>
+          ) : (
+            <div className="space-y-6">
+              <AnomalySection
+                records={filteredRecords}
+                onApplyFilter={handleFilterByTier}
+                onOpenNotesWithTarget={handleOpenNotesWithTarget}
+              />
+              <DateWiseTable
+                dailySummaries={dailySummaries}
+                allFilteredRecords={filteredRecords}
+                onOpenNotesWithTarget={handleOpenNotesWithTarget}
+              />
+            </div>
+          )
         )}
 
         {/* Tab 5: Date-wise Daily Matrix */}
         {activeTab === 'datewise' && (
-          <div className="space-y-6">
-            <DateTimelineChart
-              dailyData={dailySummaries}
-              onSelectDate={(date) => {
-                setFilter((p) => ({ ...p, startDate: date, endDate: date }));
-              }}
+          allRecords.length === 0 ? (
+            <EmptyState
+              onGoToUpload={() => setActiveTab('upload')}
+              onLoadSampleData={handleLoadSampleData}
+              onOpenAddModal={() => setIsAddModalOpen(true)}
+              onLoadedRecords={handleLoadUploadedRecords}
             />
-            <DateWiseTable
-              dailySummaries={dailySummaries}
-              allFilteredRecords={filteredRecords}
-              onOpenNotesWithTarget={handleOpenNotesWithTarget}
-            />
-          </div>
+          ) : (
+            <div className="space-y-6">
+              <DateTimelineChart
+                dailyData={dailySummaries}
+                onSelectDate={(date) => {
+                  setFilter((p) => ({ ...p, startDate: date, endDate: date }));
+                }}
+              />
+              <DateWiseTable
+                dailySummaries={dailySummaries}
+                allFilteredRecords={filteredRecords}
+                onOpenNotesWithTarget={handleOpenNotesWithTarget}
+              />
+            </div>
+          )
         )}
 
         {/* Tab 6: Excel Upload & PDF Report Generator */}
@@ -531,6 +634,8 @@ function TrropDashboard() {
             citySummaries={citySummaries}
             brandSummaries={brandSummaries}
             onLoadUploadedRecords={handleLoadUploadedRecords}
+            onNavigateToOverview={() => setActiveTab('overview')}
+            onNavigateToAds={() => setActiveTab('ads')}
           />
         )}
 
@@ -577,6 +682,9 @@ function TrropDashboard() {
             </div>
           </div>
         )}
+
+        {/* Offline indicator for PWA mobile/desktop users */}
+        <OfflineIndicator />
       </main>
 
       {/* Real-time Notes & Add Custom Data Modal */}

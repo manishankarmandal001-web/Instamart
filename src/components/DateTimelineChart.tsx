@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { DailySummary } from '../types';
-import { formatCurrency, formatNumber, formatDateWithDay } from '../utils/formatters';
+import { formatCurrency, formatNumber, formatDateWithDay, formatDate } from '../utils/formatters';
 import { Calendar, Eye, ShoppingBag, TrendingUp, AlertTriangle } from 'lucide-react';
 
 interface DateTimelineChartProps {
@@ -78,9 +78,11 @@ export const DateTimelineChart: React.FC<DateTimelineChartProps> = ({ dailyData,
             <h3 className="text-base font-bold text-slate-900 dark:text-white">
               Date-wise Sales & Traffic Trajectory
             </h3>
-            <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-              (Sept 1 - Sept 29)
-            </span>
+            {dailyData.length > 0 && (
+              <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                ({dailyData[0].date} to {dailyData[dailyData.length - 1].date})
+              </span>
+            )}
           </div>
           <p className="text-xs text-slate-500 dark:text-slate-400">
             Interactive daily performance trend with spike & anomaly detection
@@ -268,7 +270,7 @@ export const DateTimelineChart: React.FC<DateTimelineChartProps> = ({ dailyData,
                         : 'fill-slate-400 dark:fill-slate-500'
                     }`}
                   >
-                    {pt.data.date.slice(8)} Sept
+                    {formatDate(pt.data.date)}
                   </text>
                 )}
               </g>
