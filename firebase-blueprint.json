@@ -1,0 +1,77 @@
+{
+  "entities": {
+    "user": {
+      "title": "User Profile",
+      "description": "Authenticated user profile in Trrop",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 256 },
+        "displayName": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "email"]
+    },
+    "savedFilter": {
+      "title": "Saved Filter Preset",
+      "description": "User saved filter query preset for quick analysis",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 100 },
+        "filterJson": { "type": "string", "maxLength": 2048 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "name", "filterJson"]
+    },
+    "salesRecord": {
+      "title": "Custom Sales Record",
+      "description": "Real-time user created or uploaded sales and ad record",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128 },
+        "brand": { "type": "string", "maxLength": 64 },
+        "date": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        "city": { "type": "string", "maxLength": 64 },
+        "ntbBuyers": { "type": "number" },
+        "impressions": { "type": "number" },
+        "gmv": { "type": "number" },
+        "orders": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "brand", "date", "city"]
+    },
+    "dataNote": {
+      "title": "Data Note & Annotation",
+      "description": "Collaborative real-time notes on anomalies or dates",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128 },
+        "userEmail": { "type": "string", "maxLength": 256 },
+        "date": { "type": "string", "maxLength": 32 },
+        "city": { "type": "string", "maxLength": 64 },
+        "note": { "type": "string", "maxLength": 1000 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "note", "date"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "user",
+      "description": "User profile records"
+    },
+    "/users/{userId}/savedFilters/{filterId}": {
+      "schema": "savedFilter",
+      "description": "User's saved custom filter presets"
+    },
+    "/users/{userId}/salesRecords/{recordId}": {
+      "schema": "salesRecord",
+      "description": "User's added or imported custom sales records"
+    },
+    "/notes/{noteId}": {
+      "schema": "dataNote",
+      "description": "Collaborative notes and annotations on performance anomalies"
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Trrop - E-Commerce Sales & Ads Analytics Platform",
+  "description": "Comprehensive e-commerce sales and ads analytics platform for brand metrics, city performance, order trends, NTB buyers, anomaly filtering, and real-time insights.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

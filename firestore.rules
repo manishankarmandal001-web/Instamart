@@ -1,0 +1,108 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['userId', 'email'])
+        && data.keys().hasOnly(['userId', 'email', 'displayName', 'createdAt'])
+        && data.userId is string && data.userId.size() <= 128
+        && data.email is string && data.email.size() <= 256
+        && (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 128))
+        && (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() <= 64));
+    }
+
+    function isValidSavedFilter(data) {
+      return data.keys().hasAll(['userId', 'name', 'filterJson'])
+        && data.keys().hasOnly(['userId', 'name', 'filterJson', 'createdAt'])
+        && data.userId == request.auth.uid
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 100
+        && data.filterJson is string && data.filterJson.size() <= 4096
+        && (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() <= 64));
+    }
+
+    function isValidSalesRecord(data) {
+      return data.keys().hasAll(['userId', 'brand', 'date', 'city'])
+        && data.keys().hasOnly(['userId', 'brand', 'date', 'city', 'ntbBuyers', 'impressions', 'gmv', 'orders', 'createdAt'])
+        && data.userId == request.auth.uid
+        && data.brand is string && data.brand.size() > 0 && data.brand.size() <= 64
+        && data.date is string && data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && data.city is string && data.city.size() > 0 && data.city.size() <= 64
+        && (!('ntbBuyers' in data) || data.ntbBuyers is number)
+        && (!('impressions' in data) || data.impressions is number)
+        && (!('gmv' in data) || data.gmv is number)
+        && (!('orders' in data) || data.orders is number)
+        && (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() <= 64));
+    }
+
+    function isValidDataNote(data) {
+      return data.keys().hasAll(['userId', 'note', 'date'])
+        && data.keys().hasOnly(['userId', 'userEmail', 'date', 'city', 'note', 'createdAt'])
+        && data.userId == request.auth.uid
+        && data.note is string && data.note.size() > 0 && data.note.size() <= 1000
+        && data.date is string && data.date.size() <= 32
+        && (!('userEmail' in data) || (data.userEmail is string && data.userEmail.size() <= 256))
+        && (!('city' in data) || (data.city is string && data.city.size() <= 64))
+        && (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() <= 64));
+    }
+
+    // User profile matching
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isOwner(userId) && isValidId(userId) && isValidUser(incoming()) && incoming().userId == request.auth.uid;
+      allow update: if isOwner(userId) && isValidId(userId) && isValidUser(incoming()) && incoming().userId == existing().userId;
+      allow delete: if isOwner(userId) && isValidId(userId);
+
+      // Subcollection: savedFilters
+      match /savedFilters/{filterId} {
+        allow get: if isOwner(userId) && isValidId(userId) && isValidId(filterId);
+        allow list: if isOwner(userId) && isValidId(userId);
+        allow create: if isOwner(userId) && isValidId(userId) && isValidId(filterId) && isValidSavedFilter(incoming());
+        allow update: if isOwner(userId) && isValidId(userId) && isValidId(filterId) && isValidSavedFilter(incoming()) && incoming().userId == existing().userId;
+        allow delete: if isOwner(userId) && isValidId(userId) && isValidId(filterId);
+      }
+
+      // Subcollection: salesRecords
+      match /salesRecords/{recordId} {
+        allow get: if isOwner(userId) && isValidId(userId) && isValidId(recordId);
+        allow list: if isOwner(userId) && isValidId(userId);
+        allow create: if isOwner(userId) && isValidId(userId) && isValidId(recordId) && isValidSalesRecord(incoming());
+        allow update: if isOwner(userId) && isValidId(userId) && isValidId(recordId) && isValidSalesRecord(incoming()) && incoming().userId == existing().userId;
+        allow delete: if isOwner(userId) && isValidId(userId) && isValidId(recordId);
+      }
+    }
+
+    // Collaborative notes on dates / anomalies
+    match /notes/{noteId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(noteId) && isValidDataNote(incoming());
+      allow update: if isSignedIn() && isValidId(noteId) && resource.data.userId == request.auth.uid && isValidDataNote(incoming()) && incoming().userId == existing().userId;
+      allow delete: if isSignedIn() && isValidId(noteId) && resource.data.userId == request.auth.uid;
+    }
+  }
+}
